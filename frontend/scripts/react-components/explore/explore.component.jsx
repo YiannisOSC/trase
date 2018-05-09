@@ -99,7 +99,6 @@ class Explore extends React.PureComponent {
       selectedContextId,
       selectedTableColumn,
       selectedYears,
-      selectContext,
       showTable,
       topExporters
     } = this.props;
@@ -117,7 +116,7 @@ class Explore extends React.PureComponent {
           <div className="row context-selectors show-for-small">
             <div className="column small-12">
               <div className="dropdown-element">
-                <ContextSelector dropdownClassName="-big" selectContext={selectContext} />
+                <ContextSelector dropdownClassName="-big" isExplore />
               </div>
             </div>
             {selectedContextId && (
@@ -177,8 +176,7 @@ class Explore extends React.PureComponent {
                 <Link
                   className="c-button -pink -big explore-footer-button hide-for-small"
                   to={{
-                    type: 'tool',
-                    payload: { query: { state: { selectedContextId, selectedYears } } }
+                    type: 'tool'
                   }}
                 >
                   Explore the {isSubnational ? 'subnational' : ''} supply chain
@@ -193,16 +191,15 @@ class Explore extends React.PureComponent {
 }
 
 Explore.propTypes = {
-  topNodesKey: PropTypes.string,
-  showTable: PropTypes.bool.isRequired,
-  topExporters: PropTypes.array.isRequired,
   isSubnational: PropTypes.bool,
-  selectedYears: PropTypes.arrayOf(PropTypes.number),
-  selectContext: PropTypes.func,
   getTableElements: PropTypes.func.isRequired,
+  selectedYears: PropTypes.arrayOf(PropTypes.number),
   selectedContextId: PropTypes.number,
   selectedTableColumn: PropTypes.number.isRequired,
-  setSelectedTableColumn: PropTypes.func.isRequired
+  setSelectedTableColumn: PropTypes.func.isRequired,
+  showTable: PropTypes.bool.isRequired,
+  topExporters: PropTypes.array.isRequired,
+  topNodesKey: PropTypes.string
 };
 
 export default Explore;

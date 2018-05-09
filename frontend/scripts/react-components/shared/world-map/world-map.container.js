@@ -50,7 +50,9 @@ const memoizedGetContextFlows = memoize(getContextFlows, (c, o, ctxId, start, en
 );
 
 const mapStateToProps = state => {
-  const { selectedContext, selectedContextId, selectedYears } = state.tool;
+  const pageType = state.location.type;
+  const { selectedYears } = state.tool;
+  const { selectedContext, selectedContextId, contextIsUserSelected } = state.app;
   const origin = selectedContext && COUNTRY_ID_ORIGIN[selectedContext.countryId];
 
   const topNodesKey = getTopNodesKey(selectedContextId, 8, ...selectedYears);
@@ -61,6 +63,7 @@ const mapStateToProps = state => {
       : [];
 
   return {
+    renderFlows: contextIsUserSelected || pageType !== 'explore',
     flows,
     origin,
     selectedContext,

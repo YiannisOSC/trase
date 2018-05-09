@@ -19,7 +19,7 @@ export const GA_ACTION_WHITELIST = [
     category: 'Sankey',
     action: 'Switch context',
     getPayload: (action, state) => {
-      const actionContext = state.tool.contexts.find(context => context.id === action.payload);
+      const actionContext = state.app.contexts.find(context => context.id === action.payload.id);
       return `${actionContext.countryName} ${actionContext.commodityName}`;
     }
   },
@@ -45,13 +45,13 @@ export const GA_ACTION_WHITELIST = [
     type: SELECT_RECOLOR_BY,
     action: 'Select recolor by',
     category: 'Sankey',
-    getPayload: action => action.value
+    getPayload: action => action.payload.name
   },
   {
     type: SELECT_RESIZE_BY,
     action: 'Select resize by',
     category: 'Sankey',
-    getPayload: action => action.resizeBy
+    getPayload: action => action.payload.name
   },
   {
     type: SELECT_VIEW,

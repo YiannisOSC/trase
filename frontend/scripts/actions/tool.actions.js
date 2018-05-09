@@ -1,6 +1,4 @@
 /* eslint-disable no-use-before-define */
-import { SET_TOOLTIPS } from 'actions/app.actions';
-import { LOAD_CONTEXTS } from 'actions/data.actions';
 import { feature as topojsonFeature } from 'topojson';
 import {
   CARTO_NAMED_MAPS_BASE_URL,
@@ -13,12 +11,10 @@ import {
 import {
   GET_ALL_NODES_URL,
   GET_COLUMNS_URL,
-  GET_CONTEXTS_URL,
   GET_FLOWS_URL,
   GET_LINKED_GEO_IDS_URL,
   GET_MAP_BASE_DATA_URL,
   GET_NODE_ATTRIBUTES_URL,
-  GET_TOOLTIPS_URL,
   getURLFromParams
 } from 'utils/getURLFromParams';
 import contextLayersCarto from 'actions/map/context_layers_carto';
@@ -34,11 +30,9 @@ import difference from 'lodash/difference';
 import compact from 'lodash/compact';
 import uniq from 'lodash/uniq';
 import isEmpty from 'lodash/isEmpty';
+import { getCurrentContext } from 'scripts/reducers/helpers/contextHelper';
 
-export const LOAD_INITIAL_DATA = 'LOAD_INITIAL_DATA';
 export const RESET_SELECTION = 'RESET_SELECTION';
-export const SET_CONTEXT = 'SET_CONTEXT';
-export const LOAD_INITIAL_CONTEXT = 'LOAD_INITIAL_CONTEXT';
 export const GET_COLUMNS = 'GET_COLUMNS';
 export const SET_FLOWS_LOADING_STATE = 'SET_FLOWS_LOADING_STATE';
 export const SET_MAP_LOADING_STATE = 'SET_MAP_LOADING_STATE';
@@ -80,6 +74,59 @@ const _reloadLinks = (param, value, type, reloadLinks = true) => dispatch => {
   if (reloadLinks) {
     dispatch(loadLinks());
   }
+};
+
+const _setRecolorByAction = (recolorBy, state) => {
+  let selectedRecolorBy;
+  if (recolorBy.value === 'none') {
+    selectedRecolorBy = { type: 'none', name: 'none' };
+  } else {
+    const currentContext = getCurrentContext(state);
+    selectedRecolorBy = currentContext.recolorBy.find(
+      contextRecolorBy => contextRecolorBy.name === recolorBy.name
+    );
+  }
+
+  return {
+    type: SELECT_RECOLOR_BY,
+    payload: selectedRecolorBy
+  };
+};
+
+const _setResizeByAction = (resizeBy, state) => {
+  let selectedResizeBy;
+  if (resizeBy.value === 'none') {
+    selectedResizeBy = { name: 'none' };
+  } else {
+    const currentContext = getCurrentContext(state);
+    selectedResizeBy = currentContext.resizeBy.find(
+      contextResizeBy => contextResizeBy.name === resizeBy.name
+    );
+  }
+
+  return {
+    type: SELECT_RESIZE_BY,
+    payload: selectedResizeBy
+  };
+};
+
+const _setBiomeFilterAction = (biomeFilterName, state) => {
+  let selectedBiomeFilter;
+  if (biomeFilterName === 'none') {
+    selectedBiomeFilter = { value: 'none', name: 'none' };
+  } else {
+    const currentContext = getCurrentContext(state);
+    selectedBiomeFilter = Object.assign(
+      {},
+      currentContext.filterBy[0].nodes.find(filterBy => filterBy.name === biomeFilterName)
+    );
+    selectedBiomeFilter.geoId = state.tool.nodesDict[selectedBiomeFilter.nodeId].geoId;
+  }
+
+  return {
+    type: SELECT_BIOME_FILTER,
+    payload: selectedBiomeFilter
+  };
 };
 
 export function selectView(detailedView, reloadLinks) {
@@ -136,23 +183,15 @@ export function resetSankey() {
       forcedOverview: true
     });
 
+    const state = getState();
+
     if (defaultRecolorBy) {
-      dispatch({
-        type: SELECT_RECOLOR_BY,
-        name: defaultRecolorBy[0].name
-      });
+      dispatch(_setRecolorByAction({ value: defaultRecolorBy[0].name }, state));
     } else {
-      dispatch({
-        type: SELECT_RECOLOR_BY,
-        value: 'none',
-        value_type: 'none'
-      });
+      dispatch(_setRecolorByAction({ value: 'none' }, state));
     }
 
-    dispatch({
-      type: SELECT_RESIZE_BY,
-      resizeBy: defaultResizeBy.name
-    });
+    dispatch(_setResizeByAction(defaultResizeBy, state));
 
     dispatch({
       type: RESET_SELECTION
@@ -165,33 +204,23 @@ export function resetSankey() {
   };
 }
 
-export function selectContext(context, options) {
-  return dispatch => {
-    dispatch(setContext(context, options));
+export function selectBiomeFilter(biomeFilter) {
+  return (dispatch, getState) => {
+    dispatch(_setBiomeFilterAction(biomeFilter, getState()));
+    dispatch(loadLinks());
   };
 }
 
-export function selectContextWithUpdates(context) {
-  return dispatch => {
-    dispatch(setContext(context, { withUpdates: true }));
+export function selectResizeBy(resizeBy) {
+  return (dispatch, getState) => {
+    dispatch(_setResizeByAction(resizeBy, getState()));
+    dispatch(loadLinks());
   };
-}
-
-export function selectBiomeFilter(biomeFilter, reloadLinks) {
-  return _reloadLinks('biomeFilter', biomeFilter, SELECT_BIOME_FILTER, reloadLinks);
-}
-
-export function selectResizeBy(resizeBy, reloadLinks) {
-  return _reloadLinks('resizeBy', resizeBy, SELECT_RESIZE_BY, reloadLinks);
 }
 
 export function selectRecolorBy(data) {
-  return dispatch => {
-    dispatch({
-      type: SELECT_RECOLOR_BY,
-      value: data.value,
-      value_type: data.type
-    });
+  return (dispatch, getState) => {
+    dispatch(_setRecolorByAction(data, getState()));
     dispatch(loadLinks());
   };
 }
@@ -244,74 +273,32 @@ export function selectYears(years) {
   };
 }
 
-export const loadInitialData = forceReload => (dispatch, getState) => {
-  const { app, tool } = getState();
-  // we use forceReload to force state rehydration
-  if (app.tooltips !== null && tool.contexts.length > 0 && !forceReload) return Promise.resolve();
+export function loadToolDataForCurrentContext() {
+  return (dispatch, getState) => {
+    const state = getState();
 
-  dispatch({
-    type: LOAD_INITIAL_DATA
-  });
-
-  const contextURL = getURLFromParams(GET_CONTEXTS_URL);
-  const tooltipsURL = getURLFromParams(GET_TOOLTIPS_URL);
-
-  return Promise.all(
-    [contextURL, tooltipsURL].map(url => fetch(url).then(resp => resp.text()))
-  ).then(data => {
-    const tooltipsPayload = JSON.parse(data[1]);
-
-    dispatch({
-      type: SET_TOOLTIPS,
-      payload: tooltipsPayload
-    });
-
-    const contextPayload = JSON.parse(data[0]).data;
-    // load contexts
-    dispatch({
-      type: LOAD_CONTEXTS,
-      payload: contextPayload
-    });
-    return Promise.resolve();
-  });
-};
-
-export const setDefaultContext = () => (dispatch, getState) => {
-  const { selectedContextId, contexts } = getState().tool;
-  const defaultContextId =
-    selectedContextId || contexts.find(context => context.isDefault === true).id;
-  dispatch(setContext(defaultContextId, { withUpdates: true, isInitialContextSet: true }));
-};
-
-// hate adding these boolean params but the current flow is a nightmare and need deep refactoring
-export function setContext(contextId, { isInitialContextSet = false, withUpdates = false } = {}) {
-  return dispatch => {
-    // load default params
-    dispatch({
-      type: isInitialContextSet ? LOAD_INITIAL_CONTEXT : SET_CONTEXT,
-      payload: contextId
-    });
-
-    if (withUpdates) {
-      const params = {
-        context_id: contextId
-      };
-      const allNodesURL = getURLFromParams(GET_ALL_NODES_URL, params);
-      const columnsURL = getURLFromParams(GET_COLUMNS_URL, params);
-      const promises = [allNodesURL, columnsURL].map(url => fetch(url).then(resp => resp.text()));
-
-      Promise.all(promises).then(payload => {
-        // TODO do not wait for end of all promises/use another .all call
-        dispatch({
-          type: GET_COLUMNS,
-          payload: payload.slice(0, 2)
-        });
-
-        dispatch(loadLinks());
-        dispatch(loadNodes());
-        dispatch(loadMapVectorData());
-      });
+    if (!state.app.selectedContextId) {
+      return;
     }
+
+    const params = {
+      context_id: state.app.selectedContextId
+    };
+    const allNodesURL = getURLFromParams(GET_ALL_NODES_URL, params);
+    const columnsURL = getURLFromParams(GET_COLUMNS_URL, params);
+    const promises = [allNodesURL, columnsURL].map(url => fetch(url).then(resp => resp.text()));
+
+    Promise.all(promises).then(payload => {
+      // TODO do not wait for end of all promises/use another .all call
+      dispatch({
+        type: GET_COLUMNS,
+        payload: payload.slice(0, 2)
+      });
+
+      dispatch(loadLinks());
+      dispatch(loadNodes());
+      dispatch(loadMapVectorData());
+    });
   };
 }
 
@@ -322,7 +309,7 @@ export function loadNodes() {
     });
 
     const params = {
-      context_id: getState().tool.selectedContextId,
+      context_id: getState().app.selectedContextId,
       start_year: getState().tool.selectedYears[0],
       end_year: getState().tool.selectedYears[1]
     };
@@ -376,12 +363,8 @@ export function loadNodes() {
         });
 
         const selectedBiomeFilter = getState().tool.selectedBiomeFilter;
-        // reselect biome filter to add biome geoid
         if (selectedBiomeFilter && selectedBiomeFilter.nodeId) {
-          dispatch({
-            type: SELECT_BIOME_FILTER,
-            biomeFilter: getState().tool.selectedBiomeFilter.name
-          });
+          dispatch(_setBiomeFilterAction(selectedBiomeFilter.name, getState()));
         }
 
         const allAvailableMapDimensionsUids = payload.mapDimensionsMetaJSON.dimensions.map(
@@ -420,7 +403,7 @@ export function loadLinks() {
     });
     const state = getState();
     const params = {
-      context_id: state.tool.selectedContextId,
+      context_id: state.app.selectedContextId,
       start_year: state.tool.selectedYears[0],
       end_year: state.tool.selectedYears[1],
       include_columns: state.tool.selectedColumnsIds.join(','),
@@ -521,7 +504,7 @@ export function loadMapVectorData() {
         useGeometryFromColumnId: geoColumn.useGeometryFromColumnId
       };
       if (geoColumn.useGeometryFromColumnId === undefined) {
-        const countryName = getState().tool.selectedContext.countryName;
+        const countryName = getState().app.selectedContext.countryName;
         const vectorLayerURL = `vector_layers/${countryName}_${geoColumn.name}.topo.json`;
         const geometryPromise = fetch(vectorLayerURL)
           .then(response => {
@@ -839,7 +822,7 @@ export function loadLinkedGeoIDs() {
       return undefined;
     }
     const params = {
-      context_id: state.tool.selectedContextId,
+      context_id: state.app.selectedContextId,
       years: uniq([state.tool.selectedYears[0], state.tool.selectedYears[1]]),
       nodes_ids: selectedNodesIds,
       target_column_id: state.tool.selectedColumnsIds[0]
@@ -914,7 +897,7 @@ export function loadMapChoropeth(getState, dispatch) {
   );
 
   const params = {
-    context_id: state.tool.selectedContextId,
+    context_id: state.app.selectedContextId,
     start_year: state.tool.selectedYears[0],
     end_year: state.tool.selectedYears[1],
     layer_ids: selectedMapDimensions.map(layer => layer.id)

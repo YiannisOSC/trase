@@ -5,15 +5,16 @@ import {
   setExploreTopNodes,
   setSelectedTableColumn
 } from 'react-components/explore/explore.actions';
-import { selectContext } from 'actions/tool.actions';
+import { selectContextById } from 'actions/app.actions';
 import Explore from './explore.component';
 
 const mapStateToProps = state => {
-  const { selectedContextId, selectedContext, selectedYears } = state.tool;
+  const { selectedYears } = state.tool;
+  const { selectedContextId, contextIsUserSelected } = state.app;
   const { topNodes, selectedTableColumn } = state.explore;
   const topNodesKey = getTopNodesKey(selectedContextId, selectedTableColumn, ...selectedYears);
   const topExporters = topNodes[topNodesKey] || [];
-  const { isSubnational } = selectedContext || {};
+  const { isSubnational } = selectedContextId || {};
 
   return {
     topNodesKey,
@@ -22,14 +23,14 @@ const mapStateToProps = state => {
     selectedYears,
     selectedContextId,
     selectedTableColumn,
-    showTable: selectedContextId !== null
+    showTable: contextIsUserSelected
   };
 };
 
 const mapDispatchToProps = dispatch =>
   bindActionCreators(
     {
-      selectContext,
+      selectContextById,
       setSelectedTableColumn,
       getTableElements: setExploreTopNodes
     },
